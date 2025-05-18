@@ -22,6 +22,13 @@
             text-align: center;
             z-index: 1;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            position: absolute;
+            transition: transform 0.5s ease-out, color 1s ease-in-out;
+            white-space: nowrap;
+            pointer-events: none;
+            top: 0;
+            left: 0;
+            transform: translate(50%, 50%);
         }
 
         canvas {
@@ -39,6 +46,7 @@
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
+        const message = document.querySelector('.message');
 
         // Set canvas size to window size
         function resizeCanvas() {
@@ -57,6 +65,7 @@
                 this.dx = (Math.random() - 0.5) * 4;
                 this.dy = (Math.random() - 0.5) * 4;
                 this.color = `hsl(${Math.random() * 360}, 70%, 50%)`;
+                this.mass = this.radius;
             }
 
             draw() {
@@ -67,13 +76,50 @@
                 ctx.closePath();
             }
 
-            update() {
+            update(balls) {
+                // Wall collision
                 if (this.x + this.radius > canvas.width || this.x - this.radius < 0) {
                     this.dx = -this.dx;
                 }
                 if (this.y + this.radius > canvas.height || this.y - this.radius < 0) {
                     this.dy = -this.dy;
                 }
+
+                // Ball collision
+                balls.forEach(ball => {
+                    if (ball === this) return;
+
+                    const dx = ball.x - this.x;
+                    const dy = ball.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < this.radius + ball.radius) {
+                        // Collision detected - calculate new velocities
+                        const normalX = dx / distance;
+                        const normalY = dy / distance;
+
+                        // Relative velocity
+                        const relativeVelocityX = this.dx - ball.dx;
+                        const relativeVelocityY = this.dy - ball.dy;
+
+                        // Calculate impulse
+                        const impulse = 2 * (normalX * relativeVelocityX + normalY * relativeVelocityY) 
+                                     / (1/this.mass + 1/ball.mass);
+
+                        // Update velocities
+                        this.dx -= (impulse * normalX) / this.mass;
+                        this.dy -= (impulse * normalY) / this.mass;
+                        ball.dx += (impulse * normalX) / ball.mass;
+                        ball.dy += (impulse * normalY) / ball.mass;
+
+                        // Move balls apart to prevent sticking
+                        const overlap = (this.radius + ball.radius - distance) / 2;
+                        this.x -= overlap * normalX;
+                        this.y -= overlap * normalY;
+                        ball.x += overlap * normalX;
+                        ball.y += overlap * normalY;
+                    }
+                });
 
                 this.x += this.dx;
                 this.y += this.dy;
@@ -85,16 +131,87 @@
         // Create balls
         const balls = Array.from({ length: 15 }, () => new Ball());
 
-        // Animation loop
-        function animate() {
-            ctx.fillStyle = 'rgba(26, 26, 26, 0.2)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Wait for fonts to load to get correct dimensions
+        document.fonts.ready.then(() => {
+            // Text animation setup
+            const messageRect = message.getBoundingClientRect();
+            const textWidth = messageRect.width;
+            const textHeight = messageRect.height;
+            const padding = 20; // Padding from edges
+            
+            // Start in center
+            let textX = (canvas.width - textWidth) / 2;
+            let textY = (canvas.height - textHeight) / 2;
+            let targetX = textX;
+            let targetY = textY;
+            
+            // Color change variables
+            const colors = [
+                '#FF5252', // Red
+                '#FF9800', // Orange
+                '#FFEB3B', // Yellow
+                '#4CAF50', // Green
+                '#2196F3', // Blue
+                '#9C27B0', // Purple
+                '#E91E63'  // Pink
+            ];
+            let currentColorIndex = 0;
+            
+            // Set initial color
+            message.style.color = colors[currentColorIndex];
+            
+            // Apply initial position
+            message.style.transform = `translate(${textX}px, ${textY}px)`;
 
-            balls.forEach(ball => ball.update());
-            requestAnimationFrame(animate);
-        }
+            // Set up color change timer - change every 3 seconds
+            setInterval(() => {
+                currentColorIndex = (currentColorIndex + 1) % colors.length;
+                message.style.color = colors[currentColorIndex];
+            }, 3000);
 
-        animate();
+            function getRandomPosition() {
+                return {
+                    x: Math.random() * (canvas.width - textWidth - padding * 2) + padding,
+                    y: Math.random() * (canvas.height - textHeight - padding * 2) + padding
+                };
+            }
+
+            function updateText() {
+                // Check if we need a new target (reached current target)
+                const distanceToTarget = Math.sqrt(
+                    (textX - targetX) * (textX - targetX) + 
+                    (textY - targetY) * (textY - targetY)
+                );
+                
+                if (distanceToTarget < 5) {
+                    const newPos = getRandomPosition();
+                    targetX = newPos.x;
+                    targetY = newPos.y;
+                }
+
+                // Smooth movement towards target
+                textX += (targetX - textX) * 0.02;
+                textY += (targetY - textY) * 0.02;
+
+                // Ensure text stays within bounds
+                textX = Math.max(padding, Math.min(canvas.width - textWidth - padding, textX));
+                textY = Math.max(padding, Math.min(canvas.height - textHeight - padding, textY));
+
+                message.style.transform = `translate(${textX}px, ${textY}px)`;
+            }
+
+            // Animation loop
+            function animate() {
+                ctx.fillStyle = 'rgba(26, 26, 26, 0.2)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                balls.forEach(ball => ball.update(balls));
+                updateText();
+                requestAnimationFrame(animate);
+            }
+
+            animate();
+        });
     </script>
 </body>
 </html>
