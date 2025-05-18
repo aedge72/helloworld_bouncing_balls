@@ -44,9 +44,14 @@
     <div class="message">Hello World</div>
 
     <script>
+        'use strict';
+
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const message = document.querySelector('.message');
+
+        const BALL_COUNT = 15;
+        const COLOR_CHANGE_INTERVAL = 3000; // ms
 
         // Set canvas size to window size
         function resizeCanvas() {
@@ -93,6 +98,13 @@
                     const dy = ball.y - this.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
 
+                    if (distance === 0) {
+                        // Prevent division by zero by nudging overlapping balls
+                        ball.x += Math.random() - 0.5;
+                        ball.y += Math.random() - 0.5;
+                        return;
+                    }
+
                     if (distance < this.radius + ball.radius) {
                         // Collision detected - calculate new velocities
                         const normalX = dx / distance;
@@ -103,7 +115,7 @@
                         const relativeVelocityY = this.dy - ball.dy;
 
                         // Calculate impulse
-                        const impulse = 2 * (normalX * relativeVelocityX + normalY * relativeVelocityY) 
+                        const impulse = 2 * (normalX * relativeVelocityX + normalY * relativeVelocityY)
                                      / (1/this.mass + 1/ball.mass);
 
                         // Update velocities
@@ -129,22 +141,26 @@
         }
 
         // Create balls
-        const balls = Array.from({ length: 15 }, () => new Ball());
+        const balls = Array.from({ length: BALL_COUNT }, () => new Ball());
 
-        // Wait for fonts to load to get correct dimensions
-        document.fonts.ready.then(() => {
+        // Wait for fonts to load (fallback to resolved promise if not supported)
+        const fontsReady = document.fonts && document.fonts.ready
+            ? document.fonts.ready
+            : Promise.resolve();
+
+        fontsReady.then(() => {
             // Text animation setup
             const messageRect = message.getBoundingClientRect();
             const textWidth = messageRect.width;
             const textHeight = messageRect.height;
             const padding = 20; // Padding from edges
-            
+
             // Start in center
             let textX = (canvas.width - textWidth) / 2;
             let textY = (canvas.height - textHeight) / 2;
             let targetX = textX;
             let targetY = textY;
-            
+
             // Color change variables
             const colors = [
                 '#FF5252', // Red
@@ -156,18 +172,18 @@
                 '#E91E63'  // Pink
             ];
             let currentColorIndex = 0;
-            
+
             // Set initial color
             message.style.color = colors[currentColorIndex];
-            
+
             // Apply initial position
             message.style.transform = `translate(${textX}px, ${textY}px)`;
 
-            // Set up color change timer - change every 3 seconds
+            // Set up color change timer
             setInterval(() => {
                 currentColorIndex = (currentColorIndex + 1) % colors.length;
                 message.style.color = colors[currentColorIndex];
-            }, 3000);
+            }, COLOR_CHANGE_INTERVAL);
 
             function getRandomPosition() {
                 return {
@@ -179,10 +195,10 @@
             function updateText() {
                 // Check if we need a new target (reached current target)
                 const distanceToTarget = Math.sqrt(
-                    (textX - targetX) * (textX - targetX) + 
+                    (textX - targetX) * (textX - targetX) +
                     (textY - targetY) * (textY - targetY)
                 );
-                
+
                 if (distanceToTarget < 5) {
                     const newPos = getRandomPosition();
                     targetX = newPos.x;
